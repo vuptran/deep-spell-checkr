@@ -1,5 +1,3 @@
-import unidecode
-import re
 import os
 import numpy as np
 
@@ -8,11 +6,12 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 from utils import CharacterTable, transform
 from utils import batch, datagen, decode_sequences
+from utils import read_text, tokenize
 from model import seq2seq
 
 error_rate = 0.8
 hidden_size = 512
-nb_epochs = 50
+nb_epochs = 100
 train_batch_size = 128
 val_batch_size = 256
 sample_mode = 'argmax'
@@ -25,17 +24,18 @@ sample_mode = 'argmax'
 # https://arxiv.org/abs/1409.3215
 reverse = True
 
-remove_chars = '[#$%"\+@<=>!&,-.?:;()*\[\]^_`{|}~/\d\t\n\r\x0b\x0c]'
+data_path = './data'
+train_books = ['nietzsche.txt', 'pride_and_prejudice.txt',
+               'shakespeare.txt', 'war_and_peace.txt']
+val_books = ['wonderland.txt']
 
 
 if __name__ == '__main__':
     # Prepare training data.
-    vocab = []
-    with open('./data/words.txt', 'r') as f:
-        for line in f:
-            vocab.extend([re.sub(remove_chars, '', token)
-                          for token in re.split("[-]", line)])
+    text  = read_text(data_path, train_books)
+    vocab = tokenize(text)
     vocab = list(filter(None, set(vocab)))
+    
     # `maxlen` is the length of the longest word in the vocabulary
     # plus two SOS and EOS characters.
     maxlen = max([len(token) for token in vocab]) + 2
@@ -56,16 +56,10 @@ if __name__ == '__main__':
     print('Max sequence length in the training set:', maxlen)
 
     # Prepare validation data.
-    books = ['wonderland.txt']
-    text = ''
-    for book in books:
-        file_path = os.path.join('./data/', book)
-        strings = unidecode.unidecode(open(file_path).read())
-        text += strings + ' '
-
-    val_tokens = [re.sub(remove_chars, '', token)
-                  for token in re.split("[-\n ]", text)]
+    text = read_text(data_path, val_books)
+    val_tokens = tokenize(text)
     val_tokens = list(filter(None, val_tokens))
+
     val_maxlen = max([len(token) for token in val_tokens]) + 2
     val_encoder, val_decoder, val_target = transform(
         val_tokens, maxlen, error_rate=error_rate, shuffle=False)
@@ -108,15 +102,15 @@ if __name__ == '__main__':
         val_target_batch  = batch(val_target, maxlen, target_ctable,
                                   val_batch_size)
     
-        train_generator = datagen(train_encoder_batch,
-                                  train_decoder_batch, train_target_batch)
-        val_generator = datagen(val_encoder_batch,
-                                val_decoder_batch, val_target_batch)
+        train_loader = datagen(train_encoder_batch,
+                               train_decoder_batch, train_target_batch)
+        val_loader = datagen(val_encoder_batch,
+                             val_decoder_batch, val_target_batch)
     
-        model.fit_generator(train_generator,
+        model.fit_generator(train_loader,
                             steps_per_epoch=train_steps,
                             epochs=1, verbose=1,
-                            validation_data=val_generator,
+                            validation_data=val_loader,
                             validation_steps=val_steps)
 
         # On epoch end - decode a batch of misspelled tokens from the

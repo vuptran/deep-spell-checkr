@@ -1,4 +1,6 @@
 import re
+import os
+import unidecode
 import numpy as np
 
 from keras.models import Model, load_model
@@ -11,6 +13,7 @@ np.random.seed(1234)
 SOS = '\t' # start of sequence.
 EOS = '*' # end of sequence.
 CHARS = list('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ')
+REMOVE_CHARS = '[#$%"\+@<=>!&,-.?:;()*\[\]^_`{|}~/\d\t\n\r\x0b\x0c]'
 
 
 class CharacterTable(object):
@@ -56,7 +59,36 @@ class CharacterTable(object):
         chars = ''.join(self.index2char[ind] for ind in indices)
         return indices, chars
 
+    def sample_multinomial(self, preds, temperature=1.0):
+        """Sample index and character output from `preds`,
+        an array of softmax probabilities with shape (1, 1, nb_chars).
+        """
+        # Reshaped to 1D array of shape (nb_chars,).
+        preds = np.reshape(preds, len(self.chars)).astype(np.float64)
+        preds = np.log(preds) / temperature
+        exp_preds = np.exp(preds)
+        preds = exp_preds / np.sum(exp_preds)
+        probs = np.random.multinomial(1, preds, 1)
+        index = np.argmax(probs)
+        char  = self.index2char[index]
+        return index, char
 
+
+def read_text(data_path, list_of_books):
+    text = ''
+    for book in list_of_books:
+        file_path = os.path.join(data_path, book)
+        strings = unidecode.unidecode(open(file_path).read())
+        text += strings + ' '
+    return text
+
+
+def tokenize(text):
+    tokens = [re.sub(REMOVE_CHARS, '', token)
+              for token in re.split("[-\n ]", text)]
+    return tokens
+
+    
 def add_speling_erors(token, error_rate):
     """Simulate some artificial spelling mistakes."""
     assert(0.0 <= error_rate < 1.0)
@@ -93,8 +125,7 @@ def add_speling_erors(token, error_rate):
 
 def transform(tokens, maxlen, error_rate=0.3, shuffle=True):
     """Transform tokens into model inputs and targets.
-    All inputs and targets are padded to maxlen with
-    EOS character.
+    All inputs and targets are padded to maxlen with EOS character.
     """
     if shuffle:
         print('Shuffling data.')
@@ -139,27 +170,12 @@ def batch(tokens, maxlen, ctable, batch_size=128, reverse=False):
 
 
 def datagen(encoder_iter, decoder_iter, target_iter):
-    """Utility function to generate data into required model format."""
+    """Utility function to load data into required model format."""
     inputs = zip(encoder_iter, decoder_iter)
     while(True):
         encoder_input, decoder_input = next(inputs)
         target = next(target_iter)
         yield ([encoder_input, decoder_input], target)
-
-
-def sample_multinomial(preds, ctable, temperature=1.0):
-    """Sample index and character output from `preds`,
-    an array of softmax probabilities with shape (1, 1, nb_chars).
-    """
-    # Reshaped to 1D array (nb_chars,).
-    preds = np.reshape(preds, ctable.size).astype(np.float64)
-    preds = np.log(preds) / temperature
-    exp_preds = np.exp(preds)
-    preds = exp_preds / np.sum(exp_preds)
-    probs = np.random.multinomial(1, preds, 1)
-    index = np.argmax(probs)
-    char  = ctable.index2char[index]
-    return index, char
 
 
 def decode_sequences(inputs, targets, input_ctable, target_ctable,
@@ -216,8 +232,8 @@ def decode_sequences(inputs, targets, input_ctable, target_ctable,
                 next_index, next_char = target_ctable.decode(
                     char_probs[i], calc_argmax=True)
             elif sample_mode == 'multinomial':
-                next_index, next_char = sample_multinomial(
-                    char_probs[i], target_ctable, temperature=0.5)
+                next_index, next_char = target_ctable.sample_multinomial(
+                    char_probs[i], temperature=0.5)
             else:
                 raise Exception(
                     "`sample_mode` accepts `argmax` or `multinomial`.")
@@ -244,7 +260,7 @@ def decode_sequences(inputs, targets, input_ctable, target_ctable,
 
 
 def restore_model(path_to_full_model, hidden_size):
-    # Restore model to construct the encoder and decoder.
+    """Restore model to construct the encoder and decoder."""
     model = load_model(path_to_full_model, custom_objects={
         'truncated_acc': truncated_acc, 'truncated_loss': truncated_loss})
     
@@ -265,9 +281,7 @@ def restore_model(path_to_full_model, hidden_size):
     decoder_outputs, state_h, state_c = decoder_lstm(
         decoder_inputs, initial_state=decoder_states_inputs)
     decoder_states = [state_h, state_c]
-    decoder_tanh = model.get_layer('decoder_tanh')
     decoder_softmax = model.get_layer('decoder_softmax')
-    decoder_outputs = decoder_tanh(decoder_outputs)
     decoder_outputs = decoder_softmax(decoder_outputs)
     decoder_model = Model(inputs=[decoder_inputs] + decoder_states_inputs,
                           outputs=[decoder_outputs] + decoder_states)

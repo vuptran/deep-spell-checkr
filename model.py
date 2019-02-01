@@ -55,11 +55,8 @@ def seq2seq(hidden_size, nb_input_chars, nb_target_chars):
                         return_state=True, name='decoder_lstm')
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
                                          initial_state=encoder_states)
-    decoder_tanh = Dense(512, activation='tanh', name='decoder_tanh')
     decoder_softmax = Dense(nb_target_chars, activation='softmax',
                             name='decoder_softmax')
-    decoder_outputs = decoder_tanh(decoder_outputs)
-    decoder_outputs = Dropout(rate=0.2, name='dropout')(decoder_outputs)
     decoder_outputs = decoder_softmax(decoder_outputs)
 
     # The main model will turn `encoder_input_data` & `decoder_input_data`
@@ -81,7 +78,6 @@ def seq2seq(hidden_size, nb_input_chars, nb_target_chars):
     decoder_outputs, state_h, state_c = decoder_lstm(
         decoder_inputs, initial_state=decoder_states_inputs)
     decoder_states = [state_h, state_c]
-    decoder_outputs = decoder_tanh(decoder_outputs)
     decoder_outputs = decoder_softmax(decoder_outputs)
     decoder_model = Model(inputs=[decoder_inputs] + decoder_states_inputs,
                           outputs=[decoder_outputs] + decoder_states)
