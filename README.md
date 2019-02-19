@@ -1,6 +1,6 @@
-# Sequence to Sequence Learning for Spelling Correction
+# Sequence-to-Sequence Learning for Spelling Correction
 
-This repository contains a Keras implementation of an encoder-decoder LSTM architecture for sequence-to-sequence spelling correction. The character-level spell checker is trained on unigram tokens derived from a vocabulary of more than 33k unique English words. After one hour of training, the speller achieves an accuracy performance of 97.6% on a validation set comprised of more than 26k tokens.
+This repository contains a Keras implementation of an encoder-decoder LSTM architecture for sequence-to-sequence spelling correction. The character-level spell checker is trained on unigram tokens derived from a vocabulary of more than ~~466k~~ 33k unique English words. After ~~12~~ one hour of training, the speller achieves an accuracy performance of ~~96.7%~~ 97.6% on a validation set comprised of more than 26k tokens.
 
 ```
 Input sentence:
@@ -28,7 +28,7 @@ The code is tested on Ubuntu 16.04 with the following components:
 * Keras 2.2.4 using TensorFlow GPU 1.12.0 backend
 * CUDA 9.1 with CuDNN 7.1
 
-### Hardware
+### Optional Hardware
 
 * Intel Xeon CPU with 32 cores
 * 64GB of system RAM
